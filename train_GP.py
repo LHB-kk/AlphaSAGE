@@ -16,10 +16,6 @@ from alphagen_generic.features import *
 from gplearn.fitness import make_fitness
 from gplearn.functions import make_function
 from gplearn.genetic import SymbolicRegressor
-from gan.utils.data import get_data_by_year
-from datetime import datetime
-
-QLIB_PATH = '/your_path/data/qlib_data/us_data_qlib'
 
 def _metric(x, y, w):
     key = y[0]
@@ -42,9 +38,6 @@ def _metric(x, y, w):
         ic = -1.
     cache[key] = ic
     return ic
-
-
-
 
 def try_single():
     top_key = Counter(cache).most_common(1)[0][0]
@@ -83,9 +76,6 @@ def try_pool(capacity):
     ic_valid, ric_valid = pool.test_ensemble(data_valid, target)
     return {'ic_test': ic_test, 'ic_valid': ic_valid, 'ric_test': ric_test, 'ric_valid': ric_valid}
 
-
-
-
 def ev():
     global generation
     generation += 1
@@ -120,20 +110,20 @@ def run(args):
     valid_start_time = f'{args.train_end_year + 1}-01-01'
     valid_end_time = f'{args.train_end_year + 1}-12-31'
     test_start_time = f'{args.train_end_year + 2}-01-01'
-    test_end_time = f'{args.train_end_year + 4}-12-31'
+    test_end_time = f'{args.train_end_year + 2}-12-31'
 
     data = StockData(instrument=args.instruments,
                            start_time=train_start_time,
                            end_time=train_end_time,
-                           qlib_path=QLIB_PATH)
+                           qlib_path=args.qlib_path)
     data_valid = StockData(instrument=args.instruments,
                            start_time=valid_start_time,
                            end_time=valid_end_time,
-                           qlib_path=QLIB_PATH)
+                           qlib_path=args.qlib_path)
     data_test = StockData(instrument=args.instruments,
                           start_time=test_start_time,
                           end_time=test_end_time,
-                          qlib_path=QLIB_PATH)
+                          qlib_path=args.qlib_path)
 
     save_dir = f'out_gp/{args.instruments}_{args.train_end_year}_{args.freq}_{args.seed}'
 
@@ -179,10 +169,11 @@ def run(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--instruments', type=str, default='csi300')
+    parser.add_argument('--instruments', type=str, default='sp500')
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--train-end-year', type=int, default=2020)
+    parser.add_argument('--train-end-year', type=int, default=2016)
     parser.add_argument('--freq', type=str, default='day')
     parser.add_argument('--cuda', type=str, default='0')
+    parser.add_argument('--qlib_path', type=str, default='/root/autodl-tmp/qlib_data/us_data')
     args = parser.parse_args()
     run(args)

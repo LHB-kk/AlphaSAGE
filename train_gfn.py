@@ -13,23 +13,19 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from alphagen.rl.env.wrapper import action2token
 
-from src.alpha_gfn.config import *
-from src.alpha_gfn.env.core import GFNEnvCore
-from src.alpha_gfn.modules import SequenceEncoder
-from src.alpha_gfn.alpha_pool import AlphaPoolGFN
-from src.alphagen.data.expression import *
-from src.alphagen_qlib.stock_data import StockData
-from src.alphagen.utils.correlation import batch_pearsonr
-from src.alpha_gfn.gflownet import EntropyTBGFlowNet
+from alpha_gfn.config import *
+from alpha_gfn.env.core import GFNEnvCore
+from alpha_gfn.modules import SequenceEncoder
+from alpha_gfn.alpha_pool import AlphaPoolGFN
+from alphagen.data.expression import *
+from alphagen_qlib.stock_data import StockData
+from alphagen.utils.correlation import batch_pearsonr
+from alpha_gfn.gflownet import EntropyTBGFlowNet
 
 from gfn.samplers import Sampler
 from gfn.gflownet.trajectory_balance import TBGFlowNet
 from gfn.modules import DiscretePolicyEstimator
 from gfn.utils.modules import NeuralNet
-
-
-
-
 
 
 class GFNLogger:
@@ -146,9 +142,9 @@ def train(args):
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     if args.instrument == 'sp500':
-        QLIB_PATH = '/your_path/data/qlib_data/us_data_qlib'
+        QLIB_PATH = '/root/autodl-tmp/qlib_data/us_data'
     else:    
-        QLIB_PATH = '/your_path/data/qlib_data/cn_data_rolling'
+        QLIB_PATH = '/root/autodl-tmp/qlib_data/cn_data_202512'
     # Initialize StockData and target expression
     data = StockData(instrument=args.instrument, start_time='2010-01-01', end_time='2016-12-31', qlib_path=QLIB_PATH)
     data_test = StockData(instrument=args.instrument, start_time='2018-01-01', end_time='2020-12-31', qlib_path=QLIB_PATH)

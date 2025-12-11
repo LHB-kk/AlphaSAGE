@@ -11,7 +11,7 @@ from gan.utils.data import get_data_by_year
 import argparse
 from datetime import datetime
 
-QLIB_PATH = '/your_path/data/qlib_data/cn_data_rolling'
+QLIB_PATH = '/root/autodl-tmp/qlib_data/cn_data_202512'
 
 def load_alpha_pool(raw) -> Tuple[List[Expression], List[float]]:
     exprs_raw = raw['exprs']

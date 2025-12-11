@@ -13,11 +13,11 @@ from alphagen.rl.env.wrapper import AlphaEnv
 
 def run(args):
     if args.instruments == 'sp500':
-        QLIB_PATH = '/your_path/data/qlib_data/us_data_qlib'
+        QLIB_PATH = '/root/autodl-tmp/qlib_data/us_data'
     else:
-        QLIB_PATH = '/your_path/data/qlib_data/cn_data_rolling'
+        QLIB_PATH = '/root/autodl-tmp/qlib_data/cn_data_202512'
     # torch.cuda.set_device(args.cuda)
-    config_path = os.path.join('config/qcm_config', f'{args.model}.yaml')
+    config_path = os.path.join('qcm_config', f'{args.model}.yaml')
 
     with open(config_path) as f:
         config = yaml.load(f, Loader=yaml.SafeLoader)
@@ -29,17 +29,20 @@ def run(args):
     
     
     data_train = StockData(instrument=args.instruments,
-                           start_time='2010-01-01',
-                           end_time='2020-12-31',
-                           qlib_path = QLIB_PATH)
-    data_valid = StockData(instrument=args.instruments,
-                           start_time='2021-01-01',
+                           start_time='2011-01-01',
                            end_time='2021-12-31',
                            qlib_path = QLIB_PATH)
+    print(1)
+    data_valid = StockData(instrument=args.instruments,
+                           start_time='2022-01-01',
+                           end_time='2022-12-31',
+                           qlib_path = QLIB_PATH)
+    print(2)
     data_test = StockData(instrument=args.instruments,
-                          start_time='2022-01-01',
-                          end_time='2024-12-31',
+                          start_time='2023-01-01',
+                          end_time='2025-12-31',
                           qlib_path = QLIB_PATH)
+    print(3)
     # calculator_train = QLibStockDataCalculator(data_train, target)
     # calculator_valid = QLibStockDataCalculator(data_valid, target)
     # calculator_test = QLibStockDataCalculator(data_test, target)
