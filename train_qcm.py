@@ -6,17 +6,10 @@ from datetime import datetime
 
 from fqf_iqn_qrdqn.agent import QRQCMAgent, IQCMAgent, FQCMAgent
 from alphagen.data.expression import Feature, FeatureType, Ref, StockData
-from alphagen_qlib.calculator import QLibStockDataCalculator
 from alphagen.models.alpha_pool import AlphaPool
 from alphagen.rl.env.wrapper import AlphaEnv
 
-
 def run(args):
-    if args.instruments == 'sp500':
-        QLIB_PATH = '/root/autodl-tmp/qlib_data/us_data'
-    else:
-        QLIB_PATH = '/root/autodl-tmp/qlib_data/cn_data_202512'
-    # torch.cuda.set_device(args.cuda)
     config_path = os.path.join('qcm_config', f'{args.model}.yaml')
 
     with open(config_path) as f:
@@ -27,25 +20,32 @@ def run(args):
     close = Feature(FeatureType.CLOSE)
     target = Ref(close, -20) / close - 1
     
-    
-    data_train = StockData(instrument=args.instruments,
-                           start_time='2011-01-01',
-                           end_time='2021-12-31',
-                           qlib_path = QLIB_PATH)
-    print(1)
-    data_valid = StockData(instrument=args.instruments,
-                           start_time='2022-01-01',
-                           end_time='2022-12-31',
-                           qlib_path = QLIB_PATH)
-    print(2)
-    data_test = StockData(instrument=args.instruments,
-                          start_time='2023-01-01',
-                          end_time='2025-12-31',
-                          qlib_path = QLIB_PATH)
-    print(3)
-    # calculator_train = QLibStockDataCalculator(data_train, target)
-    # calculator_valid = QLibStockDataCalculator(data_valid, target)
-    # calculator_test = QLibStockDataCalculator(data_test, target)
+    if args.instruments != "sp500":
+        data_train = StockData(instrument=args.instruments,
+                    start_time='2011-01-01',
+                    end_time='2021-12-31',
+                    qlib_path = args.qlib_path)
+        data_valid = StockData(instrument=args.instruments,
+                    start_time='2022-01-01',
+                    end_time='2022-12-31',
+                    qlib_path = args.qlib_path)
+        data_test = StockData(instrument=args.instruments,
+                    start_time='2023-01-01',
+                    end_time='2025-12-31',
+                    qlib_path = args.qlib_path)
+    else:
+        data_train = StockData(instrument=args.instruments,
+                    start_time='2010-01-01',
+                    end_time='2016-12-31',
+                    qlib_path = args.qlib_path)
+        data_valid = StockData(instrument=args.instruments,
+                        start_time='2017-01-01',
+                        end_time='2017-12-31',
+                        qlib_path = args.qlib_path)
+        data_test = StockData(instrument=args.instruments,
+                        start_time='2018-01-01',
+                        end_time='2020-12-31',
+                        qlib_path = args.qlib_path)
 
     train_pool = AlphaPool(
         capacity=args.pool,
@@ -107,5 +107,6 @@ if __name__ == '__main__':
     parser.add_argument('--pool', type=int, default=20)
     parser.add_argument('--std-lam', type=float, default=1.0)
     parser.add_argument('--instruments', type=str, default='csi300')
+    parser.add_argument('--qlib_path', type=str, default='')
     args = parser.parse_args()
     run(args)

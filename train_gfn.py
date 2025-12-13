@@ -7,11 +7,9 @@ import json
 from datetime import datetime
 from torch.optim import Adam
 from torch.optim.lr_scheduler import LinearLR, ExponentialLR, PolynomialLR
-from torch.distributions import Categorical
 from torch import nn
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
-from alphagen.rl.env.wrapper import action2token
 
 from alpha_gfn.config import *
 from alpha_gfn.env.core import GFNEnvCore
@@ -23,7 +21,6 @@ from alphagen.utils.correlation import batch_pearsonr
 from alpha_gfn.gflownet import EntropyTBGFlowNet
 
 from gfn.samplers import Sampler
-from gfn.gflownet.trajectory_balance import TBGFlowNet
 from gfn.modules import DiscretePolicyEstimator
 from gfn.utils.modules import NeuralNet
 
@@ -141,13 +138,14 @@ def train(args):
     np.random.seed(args.seed)
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    if args.instrument == 'sp500':
-        QLIB_PATH = '/root/autodl-tmp/qlib_data/us_data'
-    else:    
-        QLIB_PATH = '/root/autodl-tmp/qlib_data/cn_data_202512'
     # Initialize StockData and target expression
-    data = StockData(instrument=args.instrument, start_time='2010-01-01', end_time='2016-12-31', qlib_path=QLIB_PATH)
-    data_test = StockData(instrument=args.instrument, start_time='2018-01-01', end_time='2020-12-31', qlib_path=QLIB_PATH)
+    if args.instrument != "sp500":
+        data = StockData(instrument=args.instrument, start_time='2010-01-01', end_time='2016-12-31', qlib_path=args.qlib_path)
+        data_test = StockData(instrument=args.instrument, start_time='2018-01-01', end_time='2020-12-31', qlib_path=args.qlib_path)
+    else:
+        data = StockData(instrument=args.instrument, start_time='2011-01-01', end_time='2021-12-31', qlib_path=args.qlib_path)
+        data_test = StockData(instrument=args.instrument, start_time='2023-01-01', end_time='2025-12-31', qlib_path=args.qlib_path)
+
     close = Feature(FeatureType.CLOSE)
     target = Ref(close, -20) / close - 1
     
@@ -193,7 +191,6 @@ def train(args):
 
 
     # Setup logging
-    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
     log_dir = os.path.join(
         'data/gfn_logs',
         f'pool_{args.pool_capacity}',
@@ -269,7 +266,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--instrument', type=str, default='csi300')
     parser.add_argument('--pool_capacity', type=int, default=10)
-    parser.add_argument('--log_freq', type=int, default=1000)
+    parser.add_argument('--log_freq', type=int, default=100)
     parser.add_argument('--update_freq', type=int, default=128)
     parser.add_argument('--n_episodes', type=int, default=1_000)
     parser.add_argument('--encoder_type', type=str, default='lstm', choices=['transformer', 'lstm', 'gnn'])
@@ -280,6 +277,7 @@ if __name__ == '__main__':
     parser.add_argument('--nov_weight', type=float, default=0.5, help='Initial weight for novelty reward (will decay during training)')
     parser.add_argument('--weight_decay_type', type=str, default='linear', choices=['linear', 'exponential', 'polynomial'], help='Type of weight decay to apply')
     parser.add_argument('--final_weight_ratio', type=float, default=0.0, help='Final weight as ratio of initial weight (e.g., 0.1 means decay to 10% of initial)')
+    parser.add_argument('--qlib_path', type=str, default="")
     args = parser.parse_args()
     print(args)
     train(args)

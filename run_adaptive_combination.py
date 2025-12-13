@@ -1,18 +1,16 @@
-import torch 
 import os
-from gan.utils import load_pickle
-from alphagen_generic.features import *
-from alphagen.data.expression import *
-from typing import Tuple, List, Union
 import json
+import torch 
 import argparse
-from datetime import datetime
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
-import numpy as np
+from typing import Tuple, List
+from alphagen_generic.features import *
+from alphagen.data.expression import *
 
-from alphagen.utils.correlation import batch_pearsonr, batch_spearmanr, batch_ret, batch_sharpe_ratio, batch_max_drawdown
 from gan.utils.builder import exprs2tensor
+from alphagen.utils.correlation import batch_pearsonr, batch_spearmanr, batch_ret, batch_sharpe_ratio, batch_max_drawdown
 
 
 def remove_linearly_dependent_rows(x, y, to_pred, tol=1e-10):
@@ -289,32 +287,36 @@ def run(args):
         window = float('inf')
 
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.cuda)
-    if args.instruments == 'sp500':
-        QLIB_PATH = '/root/autodl-tmp/qlib_data/us_data'
-    else:
-        QLIB_PATH = '/root/autodl-tmp/qlib_data/cn_data_202512'
     # 1. Define Target and Load Data
     close = Feature(FeatureType.CLOSE)
     target = Ref(close, -args.label_days) / close - 1
-
-    train_end_time = f'{args.train_end_year}-12-31'
-    valid_start_time = f'{args.train_end_year + 1}-01-01'
-    valid_end_time = f'{args.train_end_year + 1}-12-31'
-    test_start_time = f'{args.train_end_year + 2}-01-01'
-    test_end_time = f'{args.train_end_year + 4}-12-31'
+    if args.instruments != "sp500":
+        train_start_time = "2011-01-01"
+        train_end_time = '2021-12-31'
+        valid_start_time = '2022-01-01'
+        valid_end_time = '2022-12-31'
+        test_start_time = '2023-01-01'
+        test_end_time = '2025-12-31'
+    else:
+        train_start_time = "2010-01-01"
+        train_end_time = '2016-12-31'
+        valid_start_time = '2017-01-01'
+        valid_end_time = '2017-12-31'
+        test_start_time = '2018-01-01'
+        test_end_time = '2020-12-31'
 
     data_all = StockData(instrument=args.instruments,
-                         start_time='2011-01-01',
+                         start_time=train_start_time,
                          end_time=test_end_time,
-                         qlib_path=QLIB_PATH)
+                         qlib_path=args.qlib_path)
     data_valid = StockData(instrument=args.instruments,
                            start_time=valid_start_time,
                            end_time=valid_end_time,
-                           qlib_path=QLIB_PATH)
+                           qlib_path=args.qlib_path)
     data_test = StockData(instrument=args.instruments,
                           start_time=test_start_time,
                           end_time=test_end_time,
-                          qlib_path=QLIB_PATH)
+                          qlib_path=args.qlib_path)
 
     # 2. Load expressions and convert to tensor
     print(f"Loading expressions from {args.expressions_file}...")
@@ -521,6 +523,7 @@ if __name__ == '__main__':
                         help="Whether to use VIF for multicollinearity detection.")
     parser.add_argument('--linear_dep_tol', type=float, default=1e-10,
                         help="Tolerance for linear dependence detection.")
+    parser.add_argument('--qlib_path', type=str, default="qlib_path")
     args = parser.parse_args()
     
     # Set seed for reproducibility

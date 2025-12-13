@@ -1,9 +1,10 @@
-import pandas as pd
 import os
 import shutil
+import argparse
 import datetime
-from pathlib import Path
+import pandas as pd
 from tqdm import tqdm
+from pathlib import Path
 from typing import List, Optional
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from contextlib import redirect_stdout
@@ -11,7 +12,8 @@ from contextlib import redirect_stdout
 import baostock as bs
 from baostock.data.resultset import ResultData
 
-from data_collection.qlib_dump_bin import DumpDataAll
+# from data_collection.qlib_dump_bin import DumpDataAll
+from qlib_dump_bin import DumpDataAll
 
 
 def _read_all_text(path: str) -> str:
@@ -277,14 +279,41 @@ class DataManager:
         self._save_csv()
         self._dump_qlib_data()
 
-
 if __name__ == "__main__":
-    today = str(datetime.date.today())
-    print(f"Forward adjust date: {today}")
+
+    parser = argparse.ArgumentParser(description="Fetch and process A-share stock data for Qlib.")
+    parser.add_argument(
+        "--save_path",
+        type=str,
+        default="data/tmp",
+        help="Directory to save intermediate data (default: data/tmp)"
+    )
+    parser.add_argument(
+        "--qlib_export_path",
+        type=str,
+        default="data/qlib_data/cn_data_rolling",
+        help="Directory to export Qlib-formatted data (default: data/qlib_data/cn_data_rolling)"
+    )
+    parser.add_argument(
+        "--qlib_base_data_path",
+        type=str,
+        default="data/qlib_data/cn_data",
+        help="Path to existing Qlib base data for instrument copying (default: data/qlib_data/cn_data)"
+    )
+    parser.add_argument(
+        "--forward_adjust_date",
+        type=str,
+        default=str(datetime.date.today()),
+        help="Date to use as reference for forward adjustment (default: today, format: YYYY-MM-DD)"
+    ) 
+
+    args = parser.parse_args()
+
+    print(f"Forward adjust date: {args.forward_adjust_date}")
     dm = DataManager(
-        save_path="data/tmp",
-        qlib_export_path="data/qlib_data/cn_data_rolling",
-        qlib_base_data_path="data/qlib_data/cn_data",
-        forward_adjust_date=today,
+        save_path=args.save_path,
+        qlib_export_path=args.qlib_export_path,
+        qlib_base_data_path=args.qlib_base_data_path,
+        forward_adjust_date=args.forward_adjust_date,
     )
     dm.fetch_and_save_data()

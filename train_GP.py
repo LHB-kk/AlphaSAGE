@@ -1,10 +1,8 @@
-
 import os
-import argparse
 import json
-from collections import Counter
-
+import argparse
 import numpy as np
+from collections import Counter
 
 from alphagen.data.expression import *
 from alphagen.models.alpha_pool import AlphaPool
@@ -86,15 +84,10 @@ def ev():
     print(res)
     global save_dir
     dir_ = save_dir
-    #'/path/to/save/results'
     os.makedirs(dir_, exist_ok=True)
     if generation % 2 == 0:
         with open(f'{dir_}/{generation}.json', 'w') as f:
             json.dump({'cache': cache, 'res': res}, f)
-
-
-
-
 
 def run(args):
     os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda
@@ -104,26 +97,33 @@ def run(args):
 
     close = Feature(FeatureType.CLOSE)
     target = Ref(close, -20) / close - 1
-
-    train_start_time = '2010-01-01'
-    train_end_time = f'{args.train_end_year}-12-31'
-    valid_start_time = f'{args.train_end_year + 1}-01-01'
-    valid_end_time = f'{args.train_end_year + 1}-12-31'
-    test_start_time = f'{args.train_end_year + 2}-01-01'
-    test_end_time = f'{args.train_end_year + 2}-12-31'
-
-    data = StockData(instrument=args.instruments,
-                           start_time=train_start_time,
-                           end_time=train_end_time,
-                           qlib_path=args.qlib_path)
-    data_valid = StockData(instrument=args.instruments,
-                           start_time=valid_start_time,
-                           end_time=valid_end_time,
-                           qlib_path=args.qlib_path)
-    data_test = StockData(instrument=args.instruments,
-                          start_time=test_start_time,
-                          end_time=test_end_time,
-                          qlib_path=args.qlib_path)
+    if args.instruments != "sp500":
+        
+        data = StockData(instrument=args.instruments,
+                    start_time='2011-01-01',
+                    end_time='2021-12-31',
+                    qlib_path = args.qlib_path)
+        data_valid = StockData(instrument=args.instruments,
+                    start_time='2022-01-01',
+                    end_time='2022-12-31',
+                    qlib_path = args.qlib_path)
+        data_test = StockData(instrument=args.instruments,
+                    start_time='2023-01-01',
+                    end_time='2025-12-31',
+                    qlib_path = args.qlib_path)
+    else:
+        data = StockData(instrument=args.instruments,
+                    start_time='2010-01-01',
+                    end_time='2016-12-31',
+                    qlib_path = args.qlib_path)
+        data_valid = StockData(instrument=args.instruments,
+                    start_time='2017-01-01',
+                    end_time='2017-12-31',
+                    qlib_path = args.qlib_path)
+        data_test = StockData(instrument=args.instruments,
+                    start_time='2018-01-01',
+                    end_time='2020-12-31',
+                    qlib_path = args.qlib_path)
 
     save_dir = f'out_gp/{args.instruments}_{args.train_end_year}_{args.freq}_{args.seed}'
 

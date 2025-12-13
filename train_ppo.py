@@ -6,10 +6,8 @@ from typing import Optional
 from datetime import datetime
 
 import numpy as np
-import matplotlib.pyplot as plt
 from sb3_contrib.ppo_mask import MaskablePPO
 from stable_baselines3.common.callbacks import BaseCallback
-from alphagen.data.calculator import AlphaCalculator
 
 from alphagen.data.expression import *
 from alphagen.models.alpha_pool import AlphaPool, AlphaPoolBase
@@ -17,7 +15,6 @@ from alphagen.rl.env.wrapper import AlphaEnv
 from alphagen.rl.policy import LSTMSharedNet
 from alphagen.utils.random import reseed_everything
 from alphagen.rl.env.core import AlphaEnvCore
-from alphagen_qlib.calculator import QLibStockDataCalculator
 
 class CustomCallback(BaseCallback):
     def __init__(self,
@@ -95,30 +92,36 @@ class CustomCallback(BaseCallback):
 def run(args):
     reseed_everything(args.seed)
 
-    if args.instruments == 'sp500':
-        QLIB_PATH = '/root/autodl-tmp/qlib_data/us_data'
-    else:
-        QLIB_PATH = '/root/autodl-tmp/qlib_data/cn_data_202512'
     device = torch.device('cuda')
     close = Feature(FeatureType.CLOSE)
     target = Ref(close, -20) / close - 1
-
-    # You can re-implement AlphaCalculator instead of using QLibStockDataCalculator.
-    data_train = StockData(instrument=args.instruments,
-                           start_time='2011-01-01',
-                           end_time='2021-12-31',
-                           qlib_path = QLIB_PATH)
-    data_valid = StockData(instrument=args.instruments,
-                           start_time='2022-01-01',
-                           end_time='2022-12-31',
-                           qlib_path = QLIB_PATH)
-    data_test = StockData(instrument=args.instruments,
-                          start_time='2023-01-01',
-                          end_time='2025-12-31',
-                          qlib_path = QLIB_PATH)
-    # calculator_train = QLibStockDataCalculator(data_train, target)
-    # calculator_valid = QLibStockDataCalculator(data_valid, target)
-    # calculator_test = QLibStockDataCalculator(data_test, target)
+    if args.instruments != "sp500":
+        
+        data_train = StockData(instrument=args.instruments,
+                               start_time='2011-01-01',
+                               end_time='2021-12-31',
+                               qlib_path = args.qlib_path)
+        data_valid = StockData(instrument=args.instruments,
+                               start_time='2022-01-01',
+                               end_time='2022-12-31',
+                               qlib_path = args.qlib_path)
+        data_test = StockData(instrument=args.instruments,
+                              start_time='2023-01-01',
+                              end_time='2025-12-31',
+                              qlib_path = args.qlib_path)
+    else:
+        data_train = StockData(instrument=args.instruments,
+                               start_time='2010-01-01',
+                               end_time='2016-12-31',
+                               qlib_path = args.qlib_path)
+        data_valid = StockData(instrument=args.instruments,
+                               start_time='2017-01-01',
+                               end_time='2017-12-31',
+                               qlib_path = args.qlib_path)
+        data_test = StockData(instrument=args.instruments,
+                              start_time='2018-01-01',
+                              end_time='2020-12-31',
+                              qlib_path = args.qlib_path)
 
     pool = AlphaPool(
         capacity=args.pool,
@@ -180,5 +183,6 @@ if __name__ == '__main__':
     parser.add_argument('--instruments', type=str, default='csi300')
     parser.add_argument('--pool', type=int, default=10)
     parser.add_argument('--steps', type=int, default=200_000)
+    parser.add_argument('--qlib_path', type=str, default="/root/autodl-tmp/qlib_data/us_data")
     args = parser.parse_args()
     run(args)

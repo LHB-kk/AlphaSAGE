@@ -1,8 +1,3 @@
-# Part of the of this repository refers to the following code:
-# Shuo Yu et.al (2023).https://github.com/RL-MLDM/alphagen/tree/master
-# Petersen et.al (2023)[https://github.com/dso-org/deep-symbolic-optimization]
-# Microsoft (2024) [https://github.com/microsoft/qlib/tree/main/qlib]
-
 import torch 
 import os
 from gan.dataset import Collector
@@ -18,9 +13,7 @@ from alphagen.utils.random import reseed_everything
 from gan.utils import filter_valid_blds,save_blds
 from gan.network.generater import train_network_generator
 import gc
-from gan.utils.data import get_data_by_year
 import argparse
-from datetime import datetime
 
 
 def pre_process_y(y):
@@ -153,32 +146,35 @@ def get_metric(zoo_blds,device,corr_thresh=0.5,metric_target='ic'):
 def run(args):
     os.environ["CUDA_VISIBLE_DEVICES"]=str(args.cuda)
     reseed_everything(args.seed)
-    if args.instruments == 'sp500':
-        QLIB_PATH = '/root/autodl-tmp/qlib_data/us_data'
-    else:
-        QLIB_PATH = '/root/autodl-tmp/qlib_data/cn_data_202512'
     close = Feature(FeatureType.CLOSE)
     target = Ref(close, -20) / close - 1
-    
-    train_start_time = '2011-01-01'
-    train_end_time = '2021-12-31'
-    valid_start_time = '2022-01-01'
-    valid_end_time = '2022-12-31'
-    test_start_time = '2023-01-01'
-    test_end_time = '2025-12-31'
+    if args.instruments != 'sp500':
+        train_start_time = '2011-01-01'
+        train_end_time = '2021-12-31'
+        valid_start_time = '2022-01-01'
+        valid_end_time = '2022-12-31'
+        test_start_time = '2023-01-01'
+        test_end_time = '2025-12-31'
+    else:
+        train_start_time = '2010-01-01'
+        train_end_time = '2016-12-31'
+        valid_start_time = '2017-01-01'
+        valid_end_time = '2017-12-31'
+        test_start_time = '2018-01-01'
+        test_end_time = '2020-12-31'
 
     data = StockData(instrument=args.instruments,
                            start_time=train_start_time,
                            end_time=train_end_time,
-                           qlib_path=QLIB_PATH)
+                           qlib_path=args.qlib_path)
     data_valid = StockData(instrument=args.instruments,
                            start_time=valid_start_time,
                            end_time=valid_end_time,
-                           qlib_path=QLIB_PATH)
+                           qlib_path=args.qlib_path)
     data_test = StockData(instrument=args.instruments,
                           start_time=test_start_time,
                           end_time=test_end_time,
-                          qlib_path=QLIB_PATH)
+                          qlib_path=args.qlib_path)
 
     class cfg:
         name = f'{args.save_name}_{args.instruments}_{args.train_end_year}_{args.seed}'
@@ -376,7 +372,7 @@ def run(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--instruments', type=str, default='csi300')
-    parser.add_argument('--train_end_year', type=int, default=2020)
+    parser.add_argument('--train_end_year', type=int, default=2021)
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--cuda', type=int, default=0)
     parser.add_argument('--save_name', type=str, default='test')
@@ -384,5 +380,6 @@ if __name__ == '__main__':
     parser.add_argument('--corr_thresh', type=float, default=0.7)
     parser.add_argument('--ic_thresh', type=float, default=0.03)
     parser.add_argument('--icir_thresh', type=float, default=0.1)
+    parser.add_argument('--qlib_path', type=str, default="")
     args = parser.parse_args()
     run(args)

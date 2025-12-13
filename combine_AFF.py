@@ -1,17 +1,18 @@
-import torch 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]='1'
+os.environ["CUDA_VISIBLE_DEVICES"]='0'
+import json
+import torch 
+import argparse
+import pandas as pd
+from tqdm import tqdm
+import numpy as np
+from typing import Tuple
 from gan.utils import load_pickle
 from alphagen_generic.features import *
 from alphagen.data.expression import *
-from typing import Tuple
-import json
-from typing import Union
-from gan.utils.data import get_data_by_year
-import argparse
-from datetime import datetime
-
-QLIB_PATH = '/root/autodl-tmp/qlib_data/cn_data_202512'
+from gan.utils import load_pickle,get_blds_list_df
+from gan.utils.builder import exprs2tensor
+from alphagen.utils.correlation import batch_pearsonr,batch_spearmanr,batch_ret
 
 def load_alpha_pool(raw) -> Tuple[List[Expression], List[float]]:
     exprs_raw = raw['exprs']
@@ -24,7 +25,6 @@ def load_alpha_pool_by_path(path: str) -> Tuple[List[Expression], List[float]]:
         raw = json.load(f)
         return load_alpha_pool(raw)
     
-import os
 def load_ppo_path(path,name_prefix):
     
     files = os.listdir(path)
@@ -32,11 +32,6 @@ def load_ppo_path(path,name_prefix):
     names = [i for i in os.listdir(f"{path}/{folder}") if '.json' in i]
     name = sorted(names,key = lambda x:int(x.split('_')[0]))[-1]
     return f"{path}/{folder}/{name}"
-
-from gan.utils import (
-    load_pickle,get_blds_list_df)
-import pandas as pd
-from alphagen.utils.correlation import batch_pearsonr,batch_spearmanr,batch_ret
 
 def get_feat_sign(feat,names):
     to_add = []
@@ -101,8 +96,6 @@ def get_tensor_metrics_raw(x,y):
 
     return ic_s,ric_s,ret_s
 
-import os
-
 def run(args):
     window = args.window
     if isinstance(window, str):
@@ -115,28 +108,33 @@ def run(args):
     target = Ref(close, -20) / close - 1
 
     # read data
-    train_end_time = f'{args.train_end_year}-12-31'
-    valid_start_time = f'{args.train_end_year + 1}-01-01'
-    valid_end_time = f'{args.train_end_year + 1}-12-31'
-    test_start_time = f'{args.train_end_year + 2}-01-01'
-    test_end_time = f'{args.train_end_year + 4}-12-31'
+    if args.instruments != "sp500":
+        train_start_time = "2011-01-01"
+        train_end_time = '2021-12-31'
+        valid_start_time = '2022-01-01'
+        valid_end_time = '2022-12-31'
+        test_start_time = '2023-01-01'
+        test_end_time = '2025-12-31'
+    else:
+        train_start_time = "2010-01-01"
+        train_end_time = '2016-12-31'
+        valid_start_time = '2017-01-01'
+        valid_end_time = '2017-12-31'
+        test_start_time = '2018-01-01'
+        test_end_time = '2020-12-31'
 
     data_all = StockData(instrument=args.instruments,
-                         start_time='2010-01-01',
+                         start_time=train_start_time,
                          end_time=test_end_time,
-                         qlib_path=QLIB_PATH)
-    data = StockData(instrument=args.instruments,
-                     start_time='2010-01-01',
-                     end_time=train_end_time,
-                     qlib_path=QLIB_PATH)
+                         qlib_path=args.qlib_path)
     data_valid = StockData(instrument=args.instruments,
                            start_time=valid_start_time,
                            end_time=valid_end_time,
-                           qlib_path=QLIB_PATH)
+                           qlib_path=args.qlib_path)
     data_test = StockData(instrument=args.instruments,
                           start_time=test_start_time,
                           end_time=test_end_time,
-                          qlib_path=QLIB_PATH)
+                          qlib_path=args.qlib_path)
 
     path = f"out/{args.save_name}_{args.instruments}_{args.train_end_year}_{args.seed}/z_bld_zoo_final.pkl"
     tensor_save_path = f"out/{args.save_name}_{args.instruments}_{args.train_end_year}_{args.seed}/"
@@ -144,7 +142,6 @@ def run(args):
     zoo = load_pickle(path)
     
     df = get_blds_list_df([zoo]).sort_values('score',ascending=False,key=lambda x:abs(x))
-    from gan.utils.builder import exprs2tensor
     fct_tensor = exprs2tensor(df['exprs'],data_all,normalize=True)
     tgt_tensor = exprs2tensor([target],data_all,normalize=False)
 
@@ -152,7 +149,6 @@ def run(args):
     ic_list = []
     ric_list = []
     ret_list = []
-    from tqdm import tqdm
     for cur in tqdm(range(fct_tensor.shape[-1])):
         ic_s,ric_s,ret_s = get_tensor_metrics_raw(fct_tensor[...,cur],tgt_tensor[...,0])
         ic_list.append(ic_s)
@@ -165,9 +161,6 @@ def run(args):
     torch.cuda.empty_cache()
 
     shift = 21
-
-    from tqdm import tqdm
-    import numpy as np
     pred_list = []
     ics_list = []
     rics_list = []
@@ -279,12 +272,13 @@ def run(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--instruments', type=str, default='csi300')
-    parser.add_argument('--train_end_year', type=int, default=2020)
+    parser.add_argument('--train_end_year', type=int, default=2021)
     parser.add_argument('--freq', type=str, default='day')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--cuda', type=int, default=0)
     parser.add_argument('--save_name', type=str, default='test')
     parser.add_argument('--n_factors', type=int, default=10)
     parser.add_argument('--window', type=str, default='inf')
+    parser.add_argument('--qlib_path', type=str, default='')
     args = parser.parse_args()
     run(args)
