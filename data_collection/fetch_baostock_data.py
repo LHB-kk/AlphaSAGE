@@ -174,7 +174,7 @@ class DataManager:
         )
         adj = self._adjust_factors_for(code)
         df = self._result_to_data_frame(query).join(adj, on="date", how="left")
-        df[self._adjust_columns] = df[self._adjust_columns].ffill().fillna(1.)
+        df[self._adjust_columns] = df[self._adjust_columns].ffill().fillna(1.) 
         df[numeric_fields] = df[numeric_fields].replace("", "0.").astype(float)
 
         def as_of_date(df: pd.DataFrame, date: str) -> pd.Series:

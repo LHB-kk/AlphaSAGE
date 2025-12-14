@@ -1,14 +1,24 @@
-import numpy as np
 import os
+import argparse
+import numpy as np
+import pandas as pd
+from tqdm import tqdm
+
+import lightgbm as lgb
+import xgboost as xgb
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
 from alphagen.data.expression import *
 from alphagen.utils import reseed_everything
 from alphagen_generic.features import *
 from gan.utils.data import get_data_by_year
 
 # # Utility functions
+from alphagen.utils.correlation import batch_pearsonr, batch_spearmanr, batch_ret, batch_sharpe_ratio, batch_max_drawdown
 
-import pandas as pd
-from tqdm import tqdm
 def get_ml_data(data):
     df = data.df_bak.copy()
     print(df.shape)
@@ -46,11 +56,8 @@ def normalize_data(df_train, df_valid, df_test):
 
     _mean = df_train_features.mean()
     _std = df_train_features.std()
-    print('1')
     df_train_norm = (df_train_features - _mean) / _std
-    print('2')
     df_valid_norm = (df_valid_features - _mean) / _std
-    print('3')
     df_test_norm = (df_test_features - _mean) / _std
 
     df_train_norm.fillna(0, inplace=True)
@@ -69,12 +76,6 @@ def normalize_data(df_train, df_valid, df_test):
     df_test_norm = df_test_norm.clip(-4, 4)
 
     return df_train_norm, df_valid_norm, df_test_norm
-
-# # Train LightGBM Model
-
-
-import lightgbm as lgb
-import pandas as pd
 
 def train_lightgbm_model(df_train, df_valid, df_test):
     # Fill NaN values with 0
@@ -109,44 +110,11 @@ def train_lightgbm_model(df_train, df_valid, df_test):
 
     # Train the LightGBM model
     model = lgb.train(params, train_data, valid_sets=[train_data, valid_data], num_boost_round=100, callbacks=[lgb.early_stopping(100), lgb.log_evaluation(100)])
-
     # Evaluate the model on the test set
     y_pred = model.predict(X_test)
-    
     pred = pd.concat([pd.Series(y_pred,index=df_test.index),df_test['label']],axis=1)
-    # Print the RMSE score
-    # rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-    # print(f"RMSE: {rmse}")
 
     return  model,pred
-
-for instruments in ['sp500']:
-    for train_end in range(2016,2019):
-        returned = get_data_by_year(
-            train_start = 2010, train_end=train_end,valid_year=train_end+1,test_year =train_end+2,
-            instruments=instruments, target=target,freq='day',
-            qlib_path='/root/autodl-tmp/qlib_data/us_data'
-            )
-        data_all, data,data_valid,data_valid_withhead,data_test,data_test_withhead,_ = returned
-        df_train = get_ml_data(data)
-        df_valid = get_ml_data(data_valid)
-        df_test = get_ml_data(data_test)
-        df_train, df_valid, df_test = normalize_data(df_train, df_valid, df_test)
-        
-        model_name = 'lgbm'
-        name = f"{instruments}_{model_name}_{train_end}"
-        os.makedirs(f"out_ml/{name}",exist_ok=True)
-        model,pred = train_lightgbm_model(df_train, df_valid, df_test)
-        model.save_model(f"out_ml/{name}/{model_name}.pt")
-        pred.to_pickle(f"out_ml/{name}/pred.pkl")
-
-
-# # Train XGBoost Model
-
-
-
-import xgboost as xgb
-import pandas as pd
 
 def train_xgboost_model(df_train, df_valid, df_test):
     # Fill NaN values with 0
@@ -183,48 +151,15 @@ def train_xgboost_model(df_train, df_valid, df_test):
 
     # Train the XGBoost model
     model = xgb.train(params, dtrain, evals=[(dtrain, 'train'), (dvalid, 'valid')], early_stopping_rounds=params['early_stopping_rounds'], verbose_eval=params['verbose_eval'])
-
     # Convert test data to DMatrix format
     dtest = xgb.DMatrix(X_test)
 
     # Make predictions on the test set
     y_pred = model.predict(dtest)
-
     # Combine the predictions with the actual labels
-    # pred = pd.concat([df_test['label'], pd.Series(y_pred, index=df_test.index)], axis=1)
     pred = pd.concat([pd.Series(y_pred,index=df_test.index),df_test['label']],axis=1)
 
     return model, pred
-
-
-
-for instruments in ['sp500']:
-    for train_end in range(2016,2019):
-        returned = get_data_by_year(
-            train_start = 2010,train_end=train_end,valid_year=train_end+1,test_year =train_end+2,
-            instruments=instruments, target=target,freq='day',
-            qlib_path='/root/autodl-tmp/qlib_data/us_data'
-            )
-        data_all, data,data_valid,data_valid_withhead,data_test,data_test_withhead,_ = returned
-        df_train = get_ml_data(data)
-        df_valid = get_ml_data(data_valid)
-        df_test = get_ml_data(data_test)
-        df_train, df_valid, df_test = normalize_data(df_train, df_valid, df_test)
-        
-        model_name = 'xgb'
-        name = f"{instruments}_{model_name}_{train_end}"
-        os.makedirs(f"out_ml/{name}",exist_ok=True)
-        model,pred = train_xgboost_model(df_train, df_valid, df_test)
-        model.save_model(f"out_ml/{name}/{model_name}.pt")
-        pred.to_pickle(f"out_ml/{name}/pred.pkl")
-
-
-# # Train MLP Model
-
-
-import torch
-import torch.nn as nn
-import torch.optim as optim
 
 def train_mlp_model(df_train, df_valid, df_test):
     # Fill NaN values with 0
@@ -254,11 +189,9 @@ def train_mlp_model(df_train, df_valid, df_test):
         nn.ReLU(),
         nn.Linear(32, 1)
     )
-
     # Define the loss function and optimizer
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.01)
-
 
     # Move the model to GPU if available
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -299,35 +232,6 @@ def train_mlp_model(df_train, df_valid, df_test):
         pred_df = pd.concat([df_test['label'],pd.Series(test_outputs,index=df_test.index)],axis=1)
     torch.cuda.empty_cache()
     return model, pred_df
-
-for instruments in ['sp500']:
-    for train_end in range(2016,2019):
-        returned = get_data_by_year(
-            train_start = 2010,train_end=train_end,valid_year=train_end+1,test_year =train_end+2,
-            instruments=instruments, target=target,freq='day',)
-        data_all, data,data_valid,data_valid_withhead,data_test,data_test_withhead,_ = returned
-        df_train = get_ml_data(data)
-        df_valid = get_ml_data(data_valid)
-        df_test = get_ml_data(data_test)
-        df_train, df_valid, df_test = normalize_data(df_train, df_valid, df_test)
-        for seed in range(1):
-            reseed_everything(seed)
-            model_name = 'mlp'
-            name = f"{instruments}_{model_name}_{train_end}"
-            os.makedirs(f"out_ml/{name}",exist_ok=True)
-            model,pred = train_mlp_model(df_train, df_valid, df_test)
-            # model.save_model(f"out_ml/{name}/model.pt")
-            pred.to_pickle(f"out_ml/{name}/pred_{seed}.pkl")
-
-
-# # Show LightGBM Resuls
-
-
-import pandas as pd
-from alphagen.utils.correlation import batch_pearsonr, batch_spearmanr, batch_ret, batch_sharpe_ratio, batch_max_drawdown
-import torch
-import os
-import numpy as np
 
 def chunk_batch_spearmanr(x, y, chunk_size=100):
     n_days = len(x)
@@ -374,62 +278,131 @@ def get_tensor_metrics(x, y, risk_free_rate=0.0):
     )
     return result, ret_s
 
+def main(args):
+    if args.instruments != 'sp':
+        train_start = 2011
+        start_year = 2021
+        end_year = 2024
+    else:
+        train_start = 2010
+        start_year = 2016
+        end_year = 2019
+
+    for train_end in range(start_year,end_year):
+        returned = get_data_by_year(
+            train_start = train_start, train_end=train_end,valid_year=train_end+1,test_year =train_end+2,
+            instruments=args.instruments, target=target,freq='day',
+            qlib_path=args.qlib_path
+        )
+        data_all, data,data_valid,data_valid_withhead,data_test,data_test_withhead,_ = returned
+        df_train = get_ml_data(data)
+        df_valid = get_ml_data(data_valid)
+        df_test = get_ml_data(data_test)
+        df_train, df_valid, df_test = normalize_data(df_train, df_valid, df_test)
+        
+        model_name = 'lgbm'
+        name = f"{args.instruments}_{model_name}_{train_end}"
+        os.makedirs(f"out_ml/{name}",exist_ok=True)
+        model,pred = train_lightgbm_model(df_train, df_valid, df_test)
+        model.save_model(f"out_ml/{name}/{model_name}.pt")
+        pred.to_pickle(f"out_ml/{name}/pred.pkl")
+
+    for train_end in range(start_year,end_year):
+        returned = get_data_by_year(
+            train_start = train_start,train_end=train_end,valid_year=train_end+1,test_year =train_end+2,
+            instruments=args.instruments, target=target,freq='day',
+            qlib_path=args.qlib_path
+            )
+        data_all, data,data_valid,data_valid_withhead,data_test,data_test_withhead,_ = returned
+        df_train = get_ml_data(data)
+        df_valid = get_ml_data(data_valid)
+        df_test = get_ml_data(data_test)
+        df_train, df_valid, df_test = normalize_data(df_train, df_valid, df_test)
+        
+        model_name = 'xgb'
+        name = f"{args.instruments}_{model_name}_{train_end}"
+        os.makedirs(f"out_ml/{name}",exist_ok=True)
+        model,pred = train_xgboost_model(df_train, df_valid, df_test)
+        model.save_model(f"out_ml/{name}/{model_name}.pt")
+        pred.to_pickle(f"out_ml/{name}/pred.pkl")
 
 
-
-instruments = 'sp500'
-
-result = []
-for year in range(2016,2019):
-    result.append(pd.read_pickle(f'out_ml/{instruments}_lgbm_{year}/pred.pkl'))
-df = pd.concat(result,axis=0)
-data = df.pivot_table(index="datetime", columns="instrument", values=[0,"label"])
-pred = data[0].values
-label = data["label"].values
-res, ret_s = get_tensor_metrics(torch.tensor(pred), torch.tensor(label))
-print(pd.DataFrame(res,index=['Test']))
-save_path = os.path.join(f'out_ml/{instruments}_lgbm_{year}', 'ret_s.npy')
-np.save(save_path, ret_s)
-
-
-# # Show XGBoost Result
-
-
-import pandas as pd
-instruments = 'sp500'
-
-result = []
-for year in range(2016,2019):
-    result.append(pd.read_pickle(f'out_ml/{instruments}_xgb_{year}/pred.pkl'))
-df = pd.concat(result,axis=0)
-
-data = df.pivot_table(index="datetime", columns="instrument", values=[0,"label"])
-pred = data[0].values
-label = data["label"].values
-res, ret_s = get_tensor_metrics(torch.tensor(pred), torch.tensor(label))
-print(pd.DataFrame(res,index=['Test']))
-save_path = os.path.join(f'out_ml/{instruments}_xgb_{year}', 'ret_s.npy')
-np.save(save_path, ret_s)
+    # # Train MLP Model
+    for train_end in range(start_year,end_year):
+        returned = get_data_by_year(
+            train_start = train_start,train_end=train_end,valid_year=train_end+1,test_year =train_end+2,
+            instruments=args.instruments, target=target,freq='day',)
+        data_all, data,data_valid,data_valid_withhead,data_test,data_test_withhead,_ = returned
+        df_train = get_ml_data(data)
+        df_valid = get_ml_data(data_valid)
+        df_test = get_ml_data(data_test)
+        df_train, df_valid, df_test = normalize_data(df_train, df_valid, df_test)
+        for seed in range(1):
+            reseed_everything(seed)
+            model_name = 'mlp'
+            name = f"{args.instruments}_{model_name}_{train_end}"
+            os.makedirs(f"out_ml/{name}",exist_ok=True)
+            model,pred = train_mlp_model(df_train, df_valid, df_test)
+            # model.save_model(f"out_ml/{name}/model.pt")
+            pred.to_pickle(f"out_ml/{name}/pred_{seed}.pkl")
 
 
-# # Show MLP Result
-
-
-import pandas as pd
-result_all = []
-instruments = 'sp500'
-for seed in range(1):
+    # # Show LightGBM Resuls
     result = []
-    for year in range(2016,2019):
-        result.append(pd.read_pickle(f'out_ml/{instruments}_mlp_{year}/pred_{seed}.pkl'))
-    df = pd.concat(result,axis=0)#.groupby('datetime').corr('spearman')['label'].unstack().mean()
+    for year in range(start_year,end_year):
+        result.append(pd.read_pickle(f'out_ml/{args.instruments}_lgbm_{year}/pred.pkl'))
+
+    df = pd.concat(result,axis=0)
     data = df.pivot_table(index="datetime", columns="instrument", values=[0,"label"])
     pred = data[0].values
     label = data["label"].values
     res, ret_s = get_tensor_metrics(torch.tensor(pred), torch.tensor(label))
+    print('=' * 66)
+    print("Show LightGBM Resuls")
     print(pd.DataFrame(res,index=['Test']))
-    save_path = os.path.join(f'out_ml/{instruments}_mlp_{year}', 'ret_s.npy')
+    save_path = os.path.join(f'out_ml/{args.instruments}_lgbm_{year}', 'ret_s.npy')
     np.save(save_path, ret_s)
+
+
+    # # Show XGBoost Result
+    result = []
+    for year in range(start_year,end_year):
+        result.append(pd.read_pickle(f'out_ml/{args.instruments}_xgb_{year}/pred.pkl'))
+    df = pd.concat(result,axis=0)
+
+    data = df.pivot_table(index="datetime", columns="instrument", values=[0,"label"])
+    pred = data[0].values
+    label = data["label"].values
+    res, ret_s = get_tensor_metrics(torch.tensor(pred), torch.tensor(label))
+    print('=' * 66)
+    print("Show XGBoost Result")
+    print(pd.DataFrame(res,index=['Test']))
+    save_path = os.path.join(f'out_ml/{args.instruments}_xgb_{year}', 'ret_s.npy')
+    np.save(save_path, ret_s)
+
+
+    # # Show MLP Result
+    for seed in range(1):
+        result = []
+        for year in range(start_year,end_year):
+            result.append(pd.read_pickle(f'out_ml/{args.instruments}_mlp_{year}/pred_{seed}.pkl'))
+        df = pd.concat(result,axis=0)
+        data = df.pivot_table(index="datetime", columns="instrument", values=[0,"label"])
+        pred = data[0].values
+        label = data["label"].values
+        res, ret_s = get_tensor_metrics(torch.tensor(pred), torch.tensor(label))
+        print('=' * 66)
+        print("Show MLP Result")
+        print(pd.DataFrame(res,index=['Test']))
+        save_path = os.path.join(f'out_ml/{args.instruments}_mlp_{year}', 'ret_s.npy')
+        np.save(save_path, ret_s)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run Alpha Pool Evaluation with Configurable Parameters")
+    parser.add_argument("--instruments", type=str, default="sp500", help="Instrument universe (e.g., 'sp500')")
+    parser.add_argument("--qlib_path", type=str, required=True, help="Path to Qlib data directory")
+    args = parser.parse_args()
+    main(args)
 
 
 
