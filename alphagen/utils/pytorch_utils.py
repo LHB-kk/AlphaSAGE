@@ -1,6 +1,6 @@
 from typing import Tuple, Optional
 import torch
-from torch import nn, Tensor
+from torch import Tensor
 
 
 def masked_mean_std(
@@ -13,6 +13,7 @@ def masked_mean_std(
     `n`: [days], should be `(~mask).sum(dim=1)`, provide this to avoid necessary computations
     `mask`: [days, stocks], data masked as `True` will not participate in the computation, \
     defaults to `torch.isnan(x)`
+    计算均值与标准差
     """
     if mask is None:
         mask = torch.isnan(x)

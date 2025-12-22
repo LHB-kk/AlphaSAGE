@@ -4,7 +4,6 @@ import numpy as np
 import argparse
 import os
 import json
-from datetime import datetime
 from torch.optim import Adam
 from torch.optim.lr_scheduler import LinearLR, ExponentialLR, PolynomialLR
 from torch import nn

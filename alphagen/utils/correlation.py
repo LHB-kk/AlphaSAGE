@@ -1,20 +1,23 @@
 import torch
 from torch import Tensor
-from typing import Tuple
 from alphagen.utils.pytorch_utils import masked_mean_std
 
 
 def _mask_either_nan(x: Tensor, y: Tensor, fill_with: float = torch.nan):
     x = x.clone()                       # [days, stocks]
     y = y.clone()                       # [days, stocks]
+    # 检测NaN值
     nan_mask = x.isnan() | y.isnan()
+    # 使用fill_with替换NaN值
     x[nan_mask] = fill_with
     y[nan_mask] = fill_with
+    # 计算有效数据量
     n = (~nan_mask).sum(dim=1)
     return x, y, n, nan_mask
 
 
 def _rank_data(x: Tensor, nan_mask: Tensor) -> Tensor:
+    # 计算每个元素排名
     rank = x.argsort().argsort().float()          # [d, s]
     eq = x[:, None] == x[:, :, None]                # [d, s, s]
     eq = eq / eq.sum(dim=2, keepdim=True)           # [d, s, s]
@@ -27,11 +30,16 @@ def _batch_pearsonr_given_mask(
     x: Tensor, y: Tensor,
     n: Tensor, mask: Tensor
 ) -> Tensor:
+    # 计算x和y的均值和标准差
     x_mean, x_std = masked_mean_std(x, n, mask)
     y_mean, y_std = masked_mean_std(y, n, mask)
+    # 计算协方差：cov = E[xy] - E[x]E[y]
     cov = (x * y).sum(dim=1) / n - x_mean * y_mean
+    # 计算标准差乘积
     stdmul = x_std * y_std
+    # 处理标准差接近0的情况
     stdmul[(x_std < 1e-3) | (y_std < 1e-3)] = 1
+    # 计算相关系数：corrs = cov / stdmul
     corrs = cov / stdmul
     return corrs
 
@@ -40,18 +48,9 @@ def _batch_ret_given_mask(
     n: Tensor, mask: Tensor
 ) -> Tensor:
     """
-    Calculate mean return of top 20% stocks based on factor values.
-    
-    Args:
-        x: Factor values tensor of shape [days, stocks]
-        y: Returns tensor of shape [days, stocks]
-        n: Number of valid stocks per day
-        mask: Boolean mask indicating NaN values
-    
-    Returns:
-        Mean return for each day
+    计算每一天中，因子值排名前20%的股票的平均收益率
     """
-    batch_size, num_stocks = x.shape
+    batch_size, _ = x.shape
     returns = torch.zeros(batch_size, device=x.device)
     for day_idx in range(batch_size):
         day_mask = ~mask[day_idx]  # Valid stocks for this day
@@ -68,22 +67,24 @@ def _batch_ret_given_mask(
         top_count = max(1, int(valid_count * 0.2))
         
         _, top_indices = torch.topk(day_x, top_count, largest=True)
-        _, bottom_indices = torch.topk(day_x, top_count, largest=False)
         
-        # Calculate mean return of top 20% stocks
+        # 计算因子值排名前20%的股票的平均收益率
         top_returns = day_y[top_indices]
-        bottom_returns = day_y[bottom_indices]
         returns[day_idx] = top_returns.mean()
     return returns
 
 def batch_spearmanr(x: Tensor, y: Tensor) -> Tensor:
+    # 掩码
     x, y, n, nan_mask = _mask_either_nan(x, y)
+    # 排序
     rx = _rank_data(x, nan_mask)
     ry = _rank_data(y, nan_mask)
+    # 计算皮尔逊相关系数
     return _batch_pearsonr_given_mask(rx, ry, n, nan_mask)
 
 
 def batch_pearsonr(x: Tensor, y: Tensor) -> Tensor:
+    "计算皮尔逊相关系数"
     res =  _batch_pearsonr_given_mask(*_mask_either_nan(x, y, fill_with=0.))
     # fillna
     res[res.isnan()] = 0
